@@ -7,14 +7,23 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.pm.PackageManager;
 import android.os.Bundle;
+import android.os.PowerManager;
 import android.provider.Settings;
 import android.support.v7.app.AppCompatActivity;
+import android.support.v7.widget.PopupMenu;
 import android.util.Log;
+import android.view.Menu;
+import android.view.MenuInflater;
+import android.view.MenuItem;
 import android.view.View;
 import android.widget.Button;
+import android.widget.CheckBox;
+import android.widget.ImageView;
 import android.widget.ListView;
 import android.widget.Toast;
+import android.widget.ToggleButton;
 
 import com.example.artemkovtunenko.myapplication.R;
 
@@ -26,12 +35,81 @@ import java.io.IOException;
 public class MainActivity extends AppCompatActivity {
 
 
-    String TAG= "Testing";
-    ListView list;
-    Button button1;
-    Button button2;
+    private String TAG= "Testing";
+    private ListView list;
+    private Button button1;
+    private Button button2;
+    private ToggleButton toggleButton;
     public static boolean screenOn = true;
     private BroadcastReceiver receiver = null;
+    private BroadcastReceiver receiverBoot = null;
+    private CheckBox checkBoxScreen;
+    private CheckBox checkBoxUSBdebug;
+    private View.OnClickListener listener;
+    private View.OnClickListener listener2;
+    private PowerManager power;
+    private PowerManager.WakeLock lock;
+    private int adbCheck;
+    private PopupMenu settingsPopup;
+    private ImageView imageView3;
+    private MenuInflater menuInflater;
+    private boolean onBoot = false;
+    private PackageManager pm;
+    private ComponentName component;
+
+
+    public int adbCheckFunc()
+    {
+        return Settings.Secure.getInt(getContentResolver(), Settings.Secure.ADB_ENABLED, 0);
+    }
+
+
+
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        super.onCreateOptionsMenu(menu);
+        menuInflater = getMenuInflater();
+        menuInflater.inflate(R.menu.my_menu, menu);
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        //return super.onOptionsItemSelected(item);
+        switch(item.getItemId())
+        {
+            case R.id.startOnBoot:
+                if(BootReceiver.appStarted())
+                    item.setChecked(true);
+                item.setChecked(item.isChecked());
+                //if(checked) {
+                    pm.setComponentEnabledSetting(component,
+                            PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                            PackageManager.DONT_KILL_APP);
+                    Log.i(TAG, "Start on BOOT enabled !!!!!!!!! .....");
+                return true;
+
+                //}
+            case R.id.dontStartOnBoot:
+                if(!BootReceiver.appStarted())
+                    item.setChecked(false);
+                  item.setChecked(item.isChecked());
+                //if(checked){
+                    pm.setComponentEnabledSetting(component,
+                            PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                            PackageManager.DONT_KILL_APP);
+                    Log.i(TAG, "Start on BOOT disabled !!!!!!!!! .....");
+                return true;
+                //}
+            default:
+                pm.setComponentEnabledSetting(component,
+                        PackageManager.COMPONENT_ENABLED_STATE_DEFAULT,
+                        PackageManager.DONT_KILL_APP);
+                return super.onOptionsItemSelected(item);
+        }
+
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -41,6 +119,9 @@ public class MainActivity extends AppCompatActivity {
         KeyguardManager keyguardManager = (KeyguardManager) getSystemService(Context.KEYGUARD_SERVICE);
         KeyguardLock mkeyguardLock = keyguardManager.newKeyguardLock("unlock");
         mkeyguardLock.disableKeyguard();
+
+        power = (PowerManager) getSystemService(Context.POWER_SERVICE);
+        lock = power.newWakeLock(PowerManager.FULL_WAKE_LOCK, "My Tag");
 
         Process newProcess = null;
         try {
@@ -52,6 +133,11 @@ public class MainActivity extends AppCompatActivity {
         } catch (IOException e) {
             e.printStackTrace();
         }
+        catch (RuntimeException r){}
+
+
+        Settings.Global.putInt(getContentResolver(), Settings.Secure.ADB_ENABLED, 0);
+        Log.i(TAG, "Program has Created. USB disabled !!!!!!!!! .....");
 
 
 
@@ -60,6 +146,11 @@ public class MainActivity extends AppCompatActivity {
 
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+
+        pm = getPackageManager();
+        component = new ComponentName(getApplicationContext(), BootReceiver.class);
+
 
         final IntentFilter filter = new IntentFilter(Intent.ACTION_SCREEN_ON);
         filter.addAction(Intent.ACTION_SCREEN_OFF);
@@ -70,6 +161,7 @@ public class MainActivity extends AppCompatActivity {
                 if(intent.getAction().equals(Intent.ACTION_SCREEN_OFF))
                 {
                     Log.i(TAG, "Screen went OFF !!!!!!!!! .....");
+                    Settings.Global.putInt(getContentResolver(), Settings.Secure.ADB_ENABLED, 0);
                 }
                 else if(intent.getAction().equals(Intent.ACTION_SCREEN_ON))
                 {
@@ -79,8 +171,6 @@ public class MainActivity extends AppCompatActivity {
             }
         };
         registerReceiver(receiver, filter);
-
-
 
 
         button1 = (Button) findViewById(R.id.button);
@@ -97,9 +187,80 @@ public class MainActivity extends AppCompatActivity {
 
             }
         });
+        checkBoxScreen = (CheckBox)findViewById(R.id.checkBox1);
+        checkBoxUSBdebug = (CheckBox)findViewById(R.id.checkBox);
+        adbCheck = adbCheckFunc();
+        if(adbCheck != 0)
+        {
+            checkBoxUSBdebug.setChecked(true);
+        }
+
+        listener = new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                boolean checked = ((CheckBox) view).isChecked();
+                switch (view.getId())
+                {
+                    case R.id.checkBox1:
+                        if(checked)
+                        {
+                            lock.acquire();
+                            Log.i("TAG", "Screen LOCKED !!!!!!!!! .....");
+                            Toast.makeText(MainActivity.this,
+                                    "Screen LOCKED ON", Toast.LENGTH_SHORT).show();
+                        }
+                        else
+                        {
+                            lock.release();
+                            Log.i("TAG", "Screen UNLOCKED !!!!!!!!! .....");
+                            Toast.makeText(MainActivity.this,
+                                    "Screen UNLOCKED", Toast.LENGTH_SHORT).show();
+                        }
+                        break;
+                    case R.id.checkBox:
+                        if(checked)
+                        {
+                            Settings.Global.putInt(getContentResolver(), Settings.Secure.ADB_ENABLED, 1);
+                            Log.i("TAG", "USB Debug ON !!!!!!!!! .....");
+                            Toast.makeText(MainActivity.this,
+                                    "USB Debugging is On", Toast.LENGTH_SHORT).show();
+                        }
+                        else
+                        {
+                            Settings.Global.putInt(getContentResolver(), Settings.Secure.ADB_ENABLED, 0);
+                            Log.i("TAG", "USB Debug OFF !!!!!!!!! .....");
+                            Toast.makeText(MainActivity.this,
+                                    "USB Debugging is Off", Toast.LENGTH_SHORT).show();
+                        }
+                        break;
+
+                }
+
+            }
+
+        };
+        checkBoxScreen.setOnClickListener(listener);
+        checkBoxUSBdebug.setOnClickListener(listener);
 
 
-        button2 = (Button) findViewById(R.id.button2);
+        /*
+        toggleButton = (ToggleButton) findViewById(R.id.toggleButton);
+        toggleButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                Intent intent = new Intent(MainActivity.this, SettingsActivity.class);
+                startActivity(intent);
+            }
+        });
+        */
+
+
+        /////////////////////////////////
+
+
+
+
+        /*button2 = (Button) findViewById(R.id.button2);
         button2.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
@@ -133,9 +294,10 @@ public class MainActivity extends AppCompatActivity {
                 } catch (IOException e) {
                     e.printStackTrace();
                 }*/
-                Settings.Global.putInt(getContentResolver(), Settings.Secure.ADB_ENABLED, 0);
-            }
-        });
+                //Settings.Global.putInt(getContentResolver(), Settings.Secure.ADB_ENABLED, 0);
+            //}
+        //});
+
 
 
 
@@ -150,58 +312,71 @@ public class MainActivity extends AppCompatActivity {
         list.setAdapter(adapter1);
 */
     }
+
+
+
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        unregisterReceiver(receiver);
         Settings.Global.putInt(getContentResolver(), Settings.Secure.ADB_ENABLED, 0);
         Log.i(TAG, "On Destroy .....");
     }
-    /* (non-Javadoc)
-    * @see android.app.Activity#onPause()
-    */
+
     @Override
     protected void onPause() {
         super.onPause();
+        adbCheck = adbCheckFunc();
+        if(adbCheck == 1)
+        {
+            Intent i = new Intent(getApplicationContext(), MainActivity.class);
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getApplicationContext().startActivity(i);
+        }
         Log.i(TAG, "On Pause .....");
     }
 
-    /* (non-Javadoc)
-    * @see android.app.Activity#onRestart()
-    */
+
     @Override
     protected void onRestart() {
         super.onRestart();
         Log.i(TAG, "On Restart .....");
     }
 
-    /* (non-Javadoc)
-    * @see android.app.Activity#onResume()
-    */
+
     @Override
     protected void onResume() {
         super.onResume();
         Log.i(TAG, "On Resume .....");
+        adbCheck = adbCheckFunc();
+        if(adbCheck != 0)
+        {
+            checkBoxUSBdebug.setChecked(true);
+        }
+        else
+        {
+            checkBoxUSBdebug.setChecked(false);
+        }
     }
 
-    /* (non-Javadoc)
-    * @see android.app.Activity#onStart()
-    */
+
     @Override
     protected void onStart() {
         super.onStart();
 
-        int adbCheck = Settings.Secure.getInt(getContentResolver(),
-                Settings.Secure.ADB_ENABLED, 0);
+        adbCheck = adbCheckFunc();
         // toggle the USB debugging setting
         if(adbCheck == 0)
         {
             Log.i(TAG, "USB is off");
+            //Toast.makeText(MainActivity.this,
+                    //"USB Debugging is Off", Toast.LENGTH_LONG).show();
         }
         else
         {
             Log.i(TAG, "USB is on");
-            Toast.makeText(MainActivity.this,
-                    "USB Debugging is On", Toast.LENGTH_LONG).show();
+            //Toast.makeText(MainActivity.this,
+                    //"USB Debugging is On", Toast.LENGTH_LONG).show();
         }
         //Settings.Secure.putInt(getContentResolver(),
                 //Settings.Secure.ADB_ENABLED, adb);
