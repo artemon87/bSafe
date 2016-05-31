@@ -62,6 +62,10 @@ public class MainActivity extends AppCompatActivity {
     {
         return Settings.Secure.getInt(getContentResolver(), Settings.Secure.ADB_ENABLED, 0);
     }
+    public void adbDisable()
+    {
+        Settings.Global.putInt(getContentResolver(), Settings.Secure.ADB_ENABLED, 0);
+    }
 
 
 
@@ -136,8 +140,8 @@ public class MainActivity extends AppCompatActivity {
         catch (RuntimeException r){}
 
 
-        //disable ADB debugging
-        Settings.Global.putInt(getContentResolver(), Settings.Secure.ADB_ENABLED, 0);
+        //Settings.Global.putInt(getContentResolver(), Settings.Secure.ADB_ENABLED, 0);
+        adbDisable();
         Log.i(TAG, "Program has Created. USB disabled !!!!!!!!! .....");
 
 
@@ -149,12 +153,10 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
 
-        //pm = getPackageManager();
-        //component = new ComponentName(getApplicationContext(), BootReceiver.class);
+        pm = getPackageManager();
+        component = new ComponentName(getApplicationContext(), BootReceiver.class);
 
 
-        //Listen to when screen goes off
-        //When it goes off, detect it, and turn off USB debugging
         final IntentFilter filter = new IntentFilter(Intent.ACTION_SCREEN_ON);
         filter.addAction(Intent.ACTION_SCREEN_OFF);
         receiver = new BroadcastReceiver() {
@@ -173,12 +175,9 @@ public class MainActivity extends AppCompatActivity {
 
             }
         };
-        //register that receiver
         registerReceiver(receiver, filter);
 
 
-        //Settings button
-        //lunch ADB debug setting from main screen
         button1 = (Button) findViewById(R.id.button);
         button1.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -189,10 +188,10 @@ public class MainActivity extends AppCompatActivity {
                 intent.addCategory("android.intent.category.LAUNCHER");
                 startActivity(intent);
 
+
+
             }
         });
-
-        //Set up 2 checkboxes and initialize them 
         checkBoxScreen = (CheckBox)findViewById(R.id.checkBox1);
         checkBoxUSBdebug = (CheckBox)findViewById(R.id.checkBox);
         adbCheck = adbCheckFunc();
@@ -332,13 +331,14 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onPause() {
         super.onPause();
-        adbCheck = adbCheckFunc();
+        /*adbCheck = adbCheckFunc();
         if(adbCheck == 1)
         {
             Intent i = new Intent(getApplicationContext(), MainActivity.class);
             i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             getApplicationContext().startActivity(i);
         }
+        */
         Log.i(TAG, "On Pause .....");
     }
 
